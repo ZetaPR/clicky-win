@@ -1,4 +1,5 @@
 using Clicky.Capture.Hotkeys;
+using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +11,7 @@ public static class ServiceRegistration
     public static IServiceCollection AddClickyServices(this IServiceCollection services)
     {
         services.AddSingleton<IPushToTalkHook, PushToTalkHook>();
+        services.AddSingleton<IScreenCaptureService, WgcCaptureService>();
         return services;
     }
 }
