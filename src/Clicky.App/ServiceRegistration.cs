@@ -14,9 +14,14 @@ public static class ServiceRegistration
         services.AddSingleton<IPushToTalkHook, PushToTalkHook>();
         services.AddSingleton<IScreenCaptureService, WgcCaptureService>();
 
-        // Read WorkerUrl from environment (falls back to httpbin for dev)
+        // Read settings from environment; fall back to safe defaults for dev
         var workerUrl = Environment.GetEnvironmentVariable("WORKER_URL") ?? "https://httpbin.org/post";
-        services.AddSingleton(new CompanionSettings { WorkerUrl = workerUrl });
+        var assemblyAiApiKey = Environment.GetEnvironmentVariable("ASSEMBLYAI_API_KEY") ?? string.Empty;
+        services.AddSingleton(new CompanionSettings
+        {
+            WorkerUrl = workerUrl,
+            AssemblyAiApiKey = assemblyAiApiKey,
+        });
         services.AddHttpClient<ICompanionOrchestrator, CompanionOrchestrator>();
 
         return services;
