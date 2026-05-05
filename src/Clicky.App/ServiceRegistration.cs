@@ -23,6 +23,7 @@ public static class ServiceRegistration
             AssemblyAiApiKey = assemblyAiApiKey,
         });
         services.AddHttpClient<ICompanionOrchestrator, CompanionOrchestrator>();
+        services.AddHttpClient<ILlmService, CloudflareWorkerLlmService>();
 
         return services;
     }
