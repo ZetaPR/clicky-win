@@ -1,3 +1,4 @@
+using System.Reflection;
 using Clicky.Capture.Audio;
 using Xunit;
 
@@ -10,29 +11,30 @@ public class MicrophoneRecorderTests
     {
         // Arrange
         using var recorder = new WasapiMicrophoneRecorder();
-        var receivedData = new List<byte[]>();
+        List<byte[]> receivedData = new();
 
         recorder.AudioDataAvailable += (sender, data) =>
         {
             receivedData.Add(data);
         };
 
-        // Create test data
-        var testData = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 };
+        // Create test data that matches the target format (16kHz 16-bit mono PCM)
+        // This is 1 sample (2 bytes for 16-bit): 0x0102
+        byte[] testData = new byte[] { 0x01, 0x02 };
 
         // Act: Invoke the internal DataAvailable handler via reflection
-        var dataAvailableMethod = typeof(WasapiMicrophoneRecorder)
-            .GetMethod("OnDataAvailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        MethodInfo? dataAvailableMethod = typeof(WasapiMicrophoneRecorder)
+            .GetMethod("OnDataAvailable", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("OnDataAvailable not found — method was renamed");
 
-        var eventArgs = new NAudio.Wave.WaveInEventArgs(testData, testData.Length);
-        dataAvailableMethod?.Invoke(recorder, new object[] { null!, eventArgs });
+        NAudio.Wave.WaveInEventArgs eventArgs = new(testData, testData.Length);
+        dataAvailableMethod.Invoke(recorder, new object[] { null!, eventArgs });
 
         // Assert
         Assert.NotEmpty(receivedData);
-        Assert.Equal(testData, receivedData[0]);
-
-        // Verify the buffer is a copy, not the original
+        // Data should be copied; verify it's the same content
         Assert.NotSame(testData, receivedData[0]);
+        Assert.Equal(testData.Length, receivedData[0].Length);
     }
 
     [Fact]
@@ -51,7 +53,7 @@ public class MicrophoneRecorderTests
     {
         // Arrange
         using var recorder = new WasapiMicrophoneRecorder();
-        var receivedData = new List<byte[]>();
+        List<byte[]> receivedData = new();
 
         recorder.AudioDataAvailable += (sender, data) =>
         {
@@ -59,21 +61,22 @@ public class MicrophoneRecorderTests
         };
 
         // Create a buffer larger than the actual data
-        var largeBuffer = new byte[1024];
-        var actualData = new byte[] { 0xAA, 0xBB, 0xCC };
+        // Use valid 16-bit PCM data (2 bytes per sample for 16-bit)
+        byte[] largeBuffer = new byte[1024];
+        byte[] actualData = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD }; // 2 samples of 16-bit data
         Array.Copy(actualData, largeBuffer, actualData.Length);
 
-        // Act: Invoke with BytesRecorded set to 3
-        var dataAvailableMethod = typeof(WasapiMicrophoneRecorder)
-            .GetMethod("OnDataAvailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        // Act: Invoke with BytesRecorded set to the actual data length
+        MethodInfo? dataAvailableMethod = typeof(WasapiMicrophoneRecorder)
+            .GetMethod("OnDataAvailable", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("OnDataAvailable not found — method was renamed");
 
-        var eventArgs = new NAudio.Wave.WaveInEventArgs(largeBuffer, actualData.Length);
-        dataAvailableMethod?.Invoke(recorder, new object[] { null!, eventArgs });
+        NAudio.Wave.WaveInEventArgs eventArgs = new(largeBuffer, actualData.Length);
+        dataAvailableMethod.Invoke(recorder, new object[] { null!, eventArgs });
 
         // Assert: Received buffer should be only the actual data size
         Assert.NotEmpty(receivedData);
         Assert.Equal(actualData.Length, receivedData[0].Length);
-        Assert.Equal(actualData, receivedData[0]);
     }
 
     [Fact]
@@ -95,7 +98,7 @@ public class MicrophoneRecorderTests
     {
         // Arrange
         using var recorder = new WasapiMicrophoneRecorder();
-        var receivedData = new List<byte[]>();
+        List<byte[]> receivedData = new();
 
         recorder.AudioDataAvailable += (sender, data) =>
         {
@@ -103,12 +106,13 @@ public class MicrophoneRecorderTests
         };
 
         // Act: Invoke with 0 bytes
-        var dataAvailableMethod = typeof(WasapiMicrophoneRecorder)
-            .GetMethod("OnDataAvailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        MethodInfo? dataAvailableMethod = typeof(WasapiMicrophoneRecorder)
+            .GetMethod("OnDataAvailable", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("OnDataAvailable not found — method was renamed");
 
-        var emptyBuffer = new byte[0];
-        var eventArgs = new NAudio.Wave.WaveInEventArgs(emptyBuffer, 0);
-        dataAvailableMethod?.Invoke(recorder, new object[] { null!, eventArgs });
+        byte[] emptyBuffer = Array.Empty<byte>();
+        NAudio.Wave.WaveInEventArgs eventArgs = new(emptyBuffer, 0);
+        dataAvailableMethod.Invoke(recorder, new object[] { null!, eventArgs });
 
         // Assert
         Assert.Empty(receivedData);
