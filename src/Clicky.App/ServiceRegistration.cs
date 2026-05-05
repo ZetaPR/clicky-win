@@ -3,7 +3,6 @@ using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
 using Clicky.Services;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http;
 
 namespace Clicky.App;
 
@@ -18,8 +17,7 @@ public static class ServiceRegistration
         // Read WorkerUrl from environment (falls back to httpbin for dev)
         var workerUrl = Environment.GetEnvironmentVariable("WORKER_URL") ?? "https://httpbin.org/post";
         services.AddSingleton(new CompanionSettings { WorkerUrl = workerUrl });
-        services.AddSingleton<HttpClient>();
-        services.AddSingleton<ICompanionOrchestrator, CompanionOrchestrator>();
+        services.AddHttpClient<ICompanionOrchestrator, CompanionOrchestrator>();
 
         return services;
     }

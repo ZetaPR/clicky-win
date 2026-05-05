@@ -64,8 +64,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Cancel in-flight companion operations first
+        // Cancel in-flight companion operations first, then release input hook
         _services?.GetService<ICompanionOrchestrator>()?.Dispose();
+        _services?.GetService<IPushToTalkHook>()?.Dispose();
         _trayIcon?.Dispose();
         Log.CloseAndFlush();
         (_services as IDisposable)?.Dispose();

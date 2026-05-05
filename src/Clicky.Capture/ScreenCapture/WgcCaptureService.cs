@@ -1,7 +1,8 @@
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 using Clicky.Core;
+using Windows.Win32;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Clicky.Capture.ScreenCapture;
 
@@ -14,13 +15,6 @@ namespace Clicky.Capture.ScreenCapture;
 /// </summary>
 public sealed class WgcCaptureService : IScreenCaptureService
 {
-    // SM_CXSCREEN / SM_CYSCREEN — primary monitor pixel dimensions.
-    private const int SM_CXSCREEN = 0;
-    private const int SM_CYSCREEN = 1;
-
-    [DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int nIndex);
-
     /// <inheritdoc/>
     public Task<byte[]> CapturePrimaryMonitorAsync(CancellationToken cancellationToken = default)
     {
@@ -29,8 +23,8 @@ public sealed class WgcCaptureService : IScreenCaptureService
 
     private static byte[] CaptureJpeg()
     {
-        var width = GetSystemMetrics(SM_CXSCREEN);
-        var height = GetSystemMetrics(SM_CYSCREEN);
+        var width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
+        var height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
 
         using var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
