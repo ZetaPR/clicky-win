@@ -4,8 +4,10 @@ namespace Clicky.App;
 
 public static class ServiceRegistration
 {
-    public static void Register(IServiceCollection services)
+    /// <summary>Registers all Clicky application services.</summary>
+    public static IServiceCollection AddClickyServices(this IServiceCollection services)
     {
         // Services registered here as tasks add them
+        return services;
     }
 }

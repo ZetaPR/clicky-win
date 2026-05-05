@@ -12,25 +12,39 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .Enrich.FromLogContext()
+            .WriteTo.Debug()
             .WriteTo.File(
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "Clicky", "logs", "clicky-.log"),
-                rollingInterval: RollingInterval.Day)
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 30)
             .CreateLogger();
 
         base.OnStartup(e);
 
-        var services = new ServiceCollection();
-        ServiceRegistration.Register(services);
-        _services = services.BuildServiceProvider();
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddClickyServices();
+            _services = services.BuildServiceProvider();
 
-        // Start services (Task 2 adds tray icon host here)
+            // Start services (Task 2 adds tray icon host here)
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "Failed to start Clicky");
+            Log.CloseAndFlush();
+            Shutdown(1);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         Log.CloseAndFlush();
+        (_services as IDisposable)?.Dispose();
         base.OnExit(e);
     }
 }

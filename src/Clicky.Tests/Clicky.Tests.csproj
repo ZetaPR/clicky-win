@@ -13,7 +13,6 @@
     <PackageReference Include="NSubstitute" Version="5.3.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Clicky.App\Clicky.App.csproj" />
     <ProjectReference Include="..\Clicky.Core\Clicky.Core.csproj" />
     <ProjectReference Include="..\Clicky.Capture\Clicky.Capture.csproj" />
     <ProjectReference Include="..\Clicky.Overlay\Clicky.Overlay.csproj" />
