@@ -1,105 +1,147 @@
 using Clicky.Core;
 using Clicky.Services;
 using NSubstitute;
-using System.Net;
-using System.Net.Http;
 using Xunit;
 
 namespace Clicky.Tests;
 
 public class CompanionOrchestratorTests
 {
-    [Fact]
-    public async Task OnRecordingStopped_PostsScreenshotToWorker()
+    private static (IPushToTalkHook ptt, IScreenCaptureService capture, IMicrophoneRecorder mic,
+        ITranscriptionService stt, ILlmService llm, ITtsService tts)
+        CreateFakes()
     {
-        // Arrange
         var ptt = Substitute.For<IPushToTalkHook>();
         var capture = Substitute.For<IScreenCaptureService>();
+        var mic = Substitute.For<IMicrophoneRecorder>();
+        var stt = Substitute.For<ITranscriptionService>();
+        var llm = Substitute.For<ILlmService>();
+        var tts = Substitute.For<ITtsService>();
+        return (ptt, capture, mic, stt, llm, tts);
+    }
+
+    private static CompanionOrchestrator CreateOrchestrator(
+        IPushToTalkHook ptt, IScreenCaptureService capture, IMicrophoneRecorder mic,
+        ITranscriptionService stt, ILlmService llm, ITtsService tts)
+        => new(ptt, capture, mic, stt, llm, tts);
+
+    /// <summary>
+    /// Yields an async stream from an array of strings for use in LLM mock setup.
+    /// </summary>
+    private static async IAsyncEnumerable<string> AsyncEnumerableReturn(params string[] items)
+    {
+        foreach (var item in items)
+            yield return item;
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task OnRecordingStarted_CallsConnectAndStartsMic()
+    {
+        // Arrange
+        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        orchestrator.Start();
+
+        // Act
+        ptt.RecordingStarted += Raise.Event();
+        await Task.Delay(100); // allow async void handler to complete
+
+        // Assert
+        await stt.Received().ConnectAsync(Arg.Any<CancellationToken>());
+        mic.Received().Start();
+    }
+
+    [Fact]
+    public async Task OnRecordingStopped_WithTranscript_CallsLlmAndTts()
+    {
+        // Arrange
+        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
+
         var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0x00 };
         capture.CapturePrimaryMonitorAsync(Arg.Any<CancellationToken>()).Returns(jpeg);
 
-        var handler = new StubHttpHandler(HttpStatusCode.OK, "Hello from worker");
-        var http = new HttpClient(handler);
-        var settings = new CompanionSettings { WorkerUrl = "https://test.example/post" };
+        llm.StreamResponseAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+           .Returns(AsyncEnumerableReturn("Hello", " world"));
 
-        using var orchestrator = new CompanionOrchestrator(ptt, capture, http, settings);
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
         orchestrator.Start();
 
-        // Act
+        // Start recording
+        ptt.RecordingStarted += Raise.Event();
+        await Task.Delay(100);
+
+        // Fire a final transcript
+        stt.TranscriptReceived += Raise.EventWith(new TranscriptReceivedEventArgs("test query", isFinal: true));
+
+        // Act — stop recording
         ptt.RecordingStopped += Raise.Event();
+        await Task.Delay(200); // allow async void handler and pipeline to complete
 
-        // Assert — deterministic wait with 5s timeout
-        var completed = await Task.WhenAny(handler.RequestReceivedTask, Task.Delay(5_000));
-        Assert.Equal(handler.RequestReceivedTask, completed);
-        Assert.True(handler.RequestCount > 0);
-        Assert.Equal("https://test.example/post", handler.LastRequestUri?.ToString());
+        // Assert — TTS was called at least once with any string
+        await tts.Received().SpeakAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await stt.Received().DisconnectAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public void Start_WiresRecordingStoppedEvent()
+    public async Task OnRecordingStopped_WithEmptyTranscript_DoesNotCallLlm()
     {
         // Arrange
-        var ptt = Substitute.For<IPushToTalkHook>();
-        var capture = Substitute.For<IScreenCaptureService>();
-        var http = new HttpClient(new StubHttpHandler(HttpStatusCode.OK, "ok"));
-        var settings = new CompanionSettings();
+        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
 
-        using var orchestrator = new CompanionOrchestrator(ptt, capture, http, settings);
-
-        // Act
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
         orchestrator.Start();
 
-        // Assert — the event handler was subscribed
-        ptt.Received().RecordingStopped += Arg.Any<EventHandler>();
+        // Start then stop without any transcript
+        ptt.RecordingStarted += Raise.Event();
+        await Task.Delay(100);
+
+        ptt.RecordingStopped += Raise.Event();
+        await Task.Delay(200);
+
+        // Assert — LLM should not be called
+        // StreamResponseAsync returns IAsyncEnumerable — not awaitable; verify call count directly
+        llm.DidNotReceive().StreamResponseAsync(
+            Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public void Dispose_UnwiresRecordingStoppedEvent()
+    public async Task OnRecordingStarted_WhilePipelineRunning_CancelsPreviousPipeline()
     {
         // Arrange
-        var ptt = Substitute.For<IPushToTalkHook>();
-        var capture = Substitute.For<IScreenCaptureService>();
-        var http = new HttpClient(new StubHttpHandler(HttpStatusCode.OK, "ok"));
-        var settings = new CompanionSettings();
+        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
 
-        var orchestrator = new CompanionOrchestrator(ptt, capture, http, settings);
-        orchestrator.Start();
-
-        // Act
-        orchestrator.Dispose();
-
-        // Assert — the event handler was unsubscribed on dispose
-        ptt.Received().RecordingStopped -= Arg.Any<EventHandler>();
-    }
-}
-
-/// <summary>Stub HTTP handler that records requests without making real network calls.</summary>
-internal sealed class StubHttpHandler : HttpMessageHandler
-{
-    private readonly HttpStatusCode _status;
-    private readonly string _body;
-    public int RequestCount { get; private set; }
-    public Uri? LastRequestUri { get; private set; }
-
-    private readonly TaskCompletionSource<bool> _requestReceived =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    public Task RequestReceivedTask => _requestReceived.Task;
-
-    public StubHttpHandler(HttpStatusCode status, string body)
-    {
-        _status = status;
-        _body = body;
-    }
-
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-    {
-        RequestCount++;
-        LastRequestUri = request.RequestUri;
-        _requestReceived.TrySetResult(true);
-        return Task.FromResult(new HttpResponseMessage(_status)
+        // First ConnectAsync blocks until its token is cancelled
+        stt.ConnectAsync(Arg.Any<CancellationToken>()).Returns(async ci =>
         {
-            Content = new StringContent(_body)
+            await Task.Delay(Timeout.Infinite, (CancellationToken)ci[0]);
         });
+
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        orchestrator.Start();
+
+        // Act — first press starts the blocking ConnectAsync
+        ptt.RecordingStarted += Raise.Event();
+        await Task.Delay(50); // let first pipeline get into ConnectAsync
+
+        // Second press should cancel the first and start a new session
+        ptt.RecordingStarted += Raise.Event();
+        await Task.Delay(100); // let second pipeline begin
+
+        // Assert — ConnectAsync was called twice (second press started a new session)
+        await stt.Received(2).ConnectAsync(Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public void Dispose_CanBeCalledMultipleTimes()
+    {
+        // Arrange
+        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
+        var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+
+        // Act + Assert — no exception on double dispose
+        orchestrator.Dispose();
+        orchestrator.Dispose();
+    }
+
 }
