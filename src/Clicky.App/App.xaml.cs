@@ -38,9 +38,11 @@ public partial class App : Application
             _services = services.BuildServiceProvider();
 
             var ptt = _services.GetRequiredService<IPushToTalkHook>();
-            ptt.RecordingStarted += (_, _) => Log.Information("PTT recording started");
-            ptt.RecordingStopped += (_, _) => Log.Information("PTT recording stopped");
+            ptt.RecordingStarted += (_, _) => Log.Information("Recording started");
             ptt.Start();
+
+            var companion = _services.GetRequiredService<ICompanionOrchestrator>();
+            companion.Start();
         }
         catch (Exception ex)
         {

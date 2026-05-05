@@ -2,6 +2,7 @@ using Clicky.Capture.Hotkeys;
 using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Http;
 
 namespace Clicky.App;
 
@@ -12,6 +13,13 @@ public static class ServiceRegistration
     {
         services.AddSingleton<IPushToTalkHook, PushToTalkHook>();
         services.AddSingleton<IScreenCaptureService, WgcCaptureService>();
+
+        // Read WorkerUrl from environment (falls back to httpbin for dev)
+        var workerUrl = Environment.GetEnvironmentVariable("WORKER_URL") ?? "https://httpbin.org/post";
+        services.AddSingleton(new CompanionSettings { WorkerUrl = workerUrl });
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<ICompanionOrchestrator, CompanionOrchestrator>();
+
         return services;
     }
 }
