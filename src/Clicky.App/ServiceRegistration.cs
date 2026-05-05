@@ -1,6 +1,7 @@
 using Clicky.Capture.Hotkeys;
 using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
+using Clicky.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 

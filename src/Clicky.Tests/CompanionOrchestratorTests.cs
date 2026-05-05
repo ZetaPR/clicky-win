@@ -1,4 +1,5 @@
 using Clicky.Core;
+using Clicky.Services;
 using NSubstitute;
 using System.Net;
 using System.Net.Http;
@@ -14,8 +15,8 @@ public class CompanionOrchestratorTests
         // Arrange
         var ptt = Substitute.For<IPushToTalkHook>();
         var capture = Substitute.For<IScreenCaptureService>();
-        var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0x00 }; // minimal "JPEG"
-        capture.CapturePrimaryMonitorAsync(default).ReturnsForAnyArgs(jpeg);
+        var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0x00 };
+        capture.CapturePrimaryMonitorAsync(Arg.Any<CancellationToken>()).Returns(jpeg);
 
         var handler = new StubHttpHandler(HttpStatusCode.OK, "Hello from worker");
         var http = new HttpClient(handler);
@@ -24,14 +25,12 @@ public class CompanionOrchestratorTests
         using var orchestrator = new CompanionOrchestrator(ptt, capture, http, settings);
         orchestrator.Start();
 
-        // Act — simulate RecordingStopped event
+        // Act
         ptt.RecordingStopped += Raise.Event();
 
-        // async void handler runs fire-and-forget; brief delay lets it complete.
-        // Known limitation: Task.Delay timing is non-deterministic under load.
-        await Task.Delay(500);
-
-        // Assert
+        // Assert — deterministic wait with 5s timeout
+        var completed = await Task.WhenAny(handler.RequestReceivedTask, Task.Delay(5_000));
+        Assert.Equal(handler.RequestReceivedTask, completed);
         Assert.True(handler.RequestCount > 0);
         Assert.Equal("https://test.example/post", handler.LastRequestUri?.ToString());
     }
@@ -79,9 +78,13 @@ internal sealed class StubHttpHandler : HttpMessageHandler
 {
     private readonly HttpStatusCode _status;
     private readonly string _body;
-
     public int RequestCount { get; private set; }
     public Uri? LastRequestUri { get; private set; }
+
+    private readonly TaskCompletionSource<bool> _requestReceived =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task RequestReceivedTask => _requestReceived.Task;
 
     public StubHttpHandler(HttpStatusCode status, string body)
     {
@@ -89,11 +92,11 @@ internal sealed class StubHttpHandler : HttpMessageHandler
         _body = body;
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request, CancellationToken ct)
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         RequestCount++;
         LastRequestUri = request.RequestUri;
+        _requestReceived.TrySetResult(true);
         return Task.FromResult(new HttpResponseMessage(_status)
         {
             Content = new StringContent(_body)

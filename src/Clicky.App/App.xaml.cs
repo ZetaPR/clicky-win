@@ -64,6 +64,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Cancel in-flight companion operations first
+        _services?.GetService<ICompanionOrchestrator>()?.Dispose();
         _trayIcon?.Dispose();
         Log.CloseAndFlush();
         (_services as IDisposable)?.Dispose();

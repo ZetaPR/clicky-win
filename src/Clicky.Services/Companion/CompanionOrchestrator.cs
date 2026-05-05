@@ -1,8 +1,9 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
+using Clicky.Core;
 using Serilog;
 
-namespace Clicky.Core;
+namespace Clicky.Services;
 
 /// <summary>
 /// Wires push-to-talk release to screen capture and HTTP POST to the worker endpoint.
@@ -15,6 +16,7 @@ public sealed class CompanionOrchestrator : ICompanionOrchestrator
     private readonly IScreenCaptureService _capture;
     private readonly HttpClient _http;
     private readonly CompanionSettings _settings;
+    private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
 
     public CompanionOrchestrator(
@@ -40,7 +42,7 @@ public sealed class CompanionOrchestrator : ICompanionOrchestrator
         try
         {
             Log.Information("PTT released — capturing screen");
-            var jpeg = await _capture.CapturePrimaryMonitorAsync();
+            var jpeg = await _capture.CapturePrimaryMonitorAsync(_cts.Token);
 
             Log.Information("Captured {Bytes} bytes — posting to {Url}", jpeg.Length, _settings.WorkerUrl);
 
@@ -49,10 +51,14 @@ public sealed class CompanionOrchestrator : ICompanionOrchestrator
             imageContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
             content.Add(imageContent, "screenshot", "screenshot.jpg");
 
-            using var response = await _http.PostAsync(_settings.WorkerUrl, content);
-            var body = await response.Content.ReadAsStringAsync();
+            using var response = await _http.PostAsync(_settings.WorkerUrl, content, _cts.Token);
+            var body = await response.Content.ReadAsStringAsync(_cts.Token);
             Log.Information("Worker response [{Status}]: {Body}",
                 (int)response.StatusCode, body.Length > 500 ? body[..500] + "..." : body);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown — silent
         }
         catch (Exception ex)
         {
@@ -65,6 +71,8 @@ public sealed class CompanionOrchestrator : ICompanionOrchestrator
     {
         if (_disposed) return;
         _disposed = true;
+        _cts.Cancel();
+        _cts.Dispose();
         _ptt.RecordingStopped -= OnRecordingStopped;
     }
 }

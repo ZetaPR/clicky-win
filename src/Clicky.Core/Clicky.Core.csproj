@@ -5,7 +5,5 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Clicky.Core</RootNamespace>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Serilog" Version="4.2.0" />
-  </ItemGroup>
+
 </Project>
