@@ -12,6 +12,7 @@ namespace Clicky.Services;
 /// </summary>
 public sealed class AssemblyAITranscriptionService : ITranscriptionService
 {
+    // AssemblyAI streaming v3: 16 kHz signed 16-bit PCM LE
     private const string WS_URL = "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le";
     private const string TERMINATE_MSG = """{"terminate_session":true}""";
 
@@ -19,6 +20,7 @@ public sealed class AssemblyAITranscriptionService : ITranscriptionService
     private readonly ClientWebSocket _ws = new();
     private readonly CancellationTokenSource _loopCts = new();
     private readonly TaskCompletionSource _sessionTerminated = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     private Task? _receiveLoop;
     private volatile int _disposed;
@@ -35,6 +37,8 @@ public sealed class AssemblyAITranscriptionService : ITranscriptionService
     /// <inheritdoc/>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
         _ws.Options.SetRequestHeader("Authorization", _settings.AssemblyAiApiKey);
         await _ws.ConnectAsync(new Uri(WS_URL), cancellationToken).ConfigureAwait(false);
         Log.Information("AssemblyAI WebSocket connected");
@@ -44,16 +48,28 @@ public sealed class AssemblyAITranscriptionService : ITranscriptionService
     /// <inheritdoc/>
     public async Task SendAudioAsync(byte[] pcmData, CancellationToken cancellationToken = default)
     {
-        await _ws.SendAsync(
-            new ArraySegment<byte>(pcmData),
-            WebSocketMessageType.Binary,
-            endOfMessage: true,
-            cancellationToken).ConfigureAwait(false);
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
+        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _ws.SendAsync(
+                new ArraySegment<byte>(pcmData),
+                WebSocketMessageType.Binary,
+                endOfMessage: true,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     /// <inheritdoc/>
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed != 0, this);
+
         await SendTerminateSignalAsync(cancellationToken).ConfigureAwait(false);
         await WaitForSessionTerminatedAsync(cancellationToken).ConfigureAwait(false);
         await CloseWebSocketAsync(cancellationToken).ConfigureAwait(false);
@@ -62,11 +78,20 @@ public sealed class AssemblyAITranscriptionService : ITranscriptionService
     private async Task SendTerminateSignalAsync(CancellationToken cancellationToken)
     {
         var bytes = Encoding.UTF8.GetBytes(TERMINATE_MSG);
-        await _ws.SendAsync(
-            new ArraySegment<byte>(bytes),
-            WebSocketMessageType.Text,
-            endOfMessage: true,
-            cancellationToken).ConfigureAwait(false);
+
+        await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _ws.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
 
         Log.Information("AssemblyAI terminate_session sent");
     }
@@ -88,10 +113,15 @@ public sealed class AssemblyAITranscriptionService : ITranscriptionService
 
     private async Task CloseWebSocketAsync(CancellationToken cancellationToken)
     {
-        if (_ws.State == WebSocketState.Open)
+        try
         {
-            await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", cancellationToken)
-                .ConfigureAwait(false);
+            if (_ws.State == WebSocketState.Open)
+                await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", cancellationToken)
+                    .ConfigureAwait(false);
+        }
+        catch (WebSocketException ex)
+        {
+            Log.Warning(ex, "WebSocket already closed during CloseAsync");
         }
     }
 
@@ -201,7 +231,12 @@ public sealed class AssemblyAITranscriptionService : ITranscriptionService
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         _loopCts.Cancel();
+        _ = _receiveLoop?.ContinueWith(
+            t => Log.Error(t.Exception, "Receive loop faulted after dispose"),
+            TaskContinuationOptions.OnlyOnFaulted);
         _loopCts.Dispose();
+
+        _sendLock.Dispose();
 
         if (_ws.State == WebSocketState.Open || _ws.State == WebSocketState.Connecting)
         {

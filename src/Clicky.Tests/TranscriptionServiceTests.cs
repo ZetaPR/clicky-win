@@ -94,4 +94,19 @@ public class TranscriptionServiceTests
         Assert.False(isFinal);
         Assert.False(isTerminated);
     }
+
+    [Fact]
+    public void ParseMessage_MalformedJson_ReturnsEmpty()
+    {
+        // Arrange — invalid JSON should be handled gracefully without throwing
+        const string json = """{"type":"PartialTranscript","text":""";
+
+        // Act
+        var (text, isFinal, isTerminated) = AssemblyAITranscriptionService.ParseMessage(json);
+
+        // Assert
+        Assert.Equal(string.Empty, text);
+        Assert.False(isFinal);
+        Assert.False(isTerminated);
+    }
 }
