@@ -1,3 +1,4 @@
+using Clicky.Capture.Audio;
 using Clicky.Capture.Hotkeys;
 using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
@@ -14,6 +15,11 @@ public static class ServiceRegistration
     {
         services.AddSingleton<IPushToTalkHook, PushToTalkHook>();
         services.AddSingleton<IScreenCaptureService, WgcCaptureService>();
+        services.AddSingleton<IMicrophoneRecorder, WasapiMicrophoneRecorder>();
+        services.AddSingleton<ITranscriptionService, AssemblyAITranscriptionService>();
+        services.AddSingleton<ICompanionOrchestrator, CompanionOrchestrator>();
+        services.AddHttpClient<ILlmService, CloudflareWorkerLlmService>();
+        services.AddHttpClient<ITtsService, CartesiaTtsService>();
 
         // Read settings from environment; fall back to safe defaults for dev
         var workerUrl = Environment.GetEnvironmentVariable("WORKER_URL") ?? "https://httpbin.org/post";
@@ -29,9 +35,6 @@ public static class ServiceRegistration
                 ? "a0e99841-438c-4a64-b679-ae501e7d6091"
                 : cartesiaVoiceId,
         });
-        services.AddHttpClient<ICompanionOrchestrator, CompanionOrchestrator>();
-        services.AddHttpClient<ILlmService, CloudflareWorkerLlmService>();
-        services.AddHttpClient<ITtsService, CartesiaTtsService>();
 
         return services;
     }
