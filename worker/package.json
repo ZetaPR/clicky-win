@@ -1,0 +1,8 @@
+{
+  "name": "clicky-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "wrangler": "3.78.12"
+  }
+}
