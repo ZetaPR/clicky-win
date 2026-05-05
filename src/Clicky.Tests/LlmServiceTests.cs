@@ -115,11 +115,12 @@ public class LlmServiceTests
         using var reader = new StringReader(sse);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => CollectAsync(
-            CloudflareWorkerLlmService.ParseSseStreamAsync(reader, CancellationToken.None)));
+        var deltas = await CollectAsync(
+            CloudflareWorkerLlmService.ParseSseStreamAsync(reader, CancellationToken.None));
 
-        // Assert
-        Assert.Null(exception);
+        // Assert — delta before the stop must still be yielded despite extra blank line
+        Assert.Single(deltas);
+        Assert.Equal("A", deltas[0]);
     }
 
     [Fact]
