@@ -1,3 +1,4 @@
+using Clicky.Core;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -35,6 +36,11 @@ public partial class App : Application
             var services = new ServiceCollection();
             services.AddClickyServices();
             _services = services.BuildServiceProvider();
+
+            var ptt = _services.GetRequiredService<IPushToTalkHook>();
+            ptt.RecordingStarted += (_, _) => Log.Information("PTT recording started");
+            ptt.RecordingStopped += (_, _) => Log.Information("PTT recording stopped");
+            ptt.Start();
         }
         catch (Exception ex)
         {
