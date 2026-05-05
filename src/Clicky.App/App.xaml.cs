@@ -1,3 +1,4 @@
+using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using System.IO;
@@ -8,6 +9,7 @@ namespace Clicky.App;
 public partial class App : Application
 {
     private IServiceProvider? _services;
+    private TaskbarIcon? _trayIcon;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -27,11 +29,12 @@ public partial class App : Application
 
         try
         {
+            _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
+            Log.Information("Tray icon initialized");
+
             var services = new ServiceCollection();
             services.AddClickyServices();
             _services = services.BuildServiceProvider();
-
-            // Start services (Task 2 adds tray icon host here)
         }
         catch (Exception ex)
         {
@@ -41,8 +44,19 @@ public partial class App : Application
         }
     }
 
+    private void QuitMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        Shutdown();
+    }
+
+    private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        Log.Information("Settings clicked (not yet implemented)");
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        _trayIcon?.Dispose();
         Log.CloseAndFlush();
         (_services as IDisposable)?.Dispose();
         base.OnExit(e);
