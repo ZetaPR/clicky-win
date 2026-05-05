@@ -1,4 +1,5 @@
 using Clicky.Core;
+using Serilog;
 using SharpHook;
 using SharpHook.Native;
 
@@ -23,17 +24,22 @@ public sealed class PushToTalkHook : IPushToTalkHook
     /// <summary>Initializes the hook with a keyboard-only global listener.</summary>
     public PushToTalkHook()
     {
-        // runAsyncOnBackgroundThread: true so RunAsync() spawns its own background thread.
-        _hook = new SimpleGlobalHook(runAsyncOnBackgroundThread: true);
+        // GlobalHookType.Keyboard limits the hook to keyboard events only, avoiding unnecessary
+        // mouse hook overhead. Provider is null to use the default libuiohook provider.
+        _hook = new SimpleGlobalHook(GlobalHookType.Keyboard, globalHookProvider: null, runAsyncOnBackgroundThread: true);
         _hook.KeyPressed += OnKeyPressed;
         _hook.KeyReleased += OnKeyReleased;
     }
 
     /// <inheritdoc/>
-    public void Start() => _hook.RunAsync();
-
-    /// <inheritdoc/>
-    public void Stop() => Dispose();
+    public void Start()
+    {
+        _ = _hook.RunAsync().ContinueWith(
+            t => Log.Error(t.Exception, "Push-to-talk hook failed to run"),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
+    }
 
     private void OnKeyPressed(object? sender, KeyboardHookEventArgs e)
     {

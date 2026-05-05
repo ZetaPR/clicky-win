@@ -147,21 +147,32 @@ public class HotkeyStateTests
     // ── Round-trip ─────────────────────────────────────────────────────────
 
     [Fact]
-    public void FullCycle_StartThenStop_ResetsStateForNextPress()
+    public void FullCycle_AfterStop_RequiresFullComboToRestart()
     {
         // Arrange
         var state = new HotkeyState();
 
-        // Act — first recording cycle
-        var firstStart = state.OnKeyDown(ctrl: true, win: true, space: true);
-        var firstStop = state.OnKeyUp(ctrl: false, win: false, space: true);
+        // Press all three to start
+        state.OnKeyDown(ctrl: true, win: false, space: false);
+        state.OnKeyDown(ctrl: false, win: true, space: false);
+        state.OnKeyDown(ctrl: false, win: false, space: true);
+        Assert.True(state.IsRecording);
 
-        // Re-press space after releasing it
-        var secondStart = state.OnKeyDown(ctrl: false, win: false, space: true);
+        // Release space to stop
+        state.OnKeyUp(ctrl: false, win: false, space: true);
+        Assert.False(state.IsRecording);
 
-        // Assert
-        Assert.True(firstStart);
-        Assert.True(firstStop);
-        Assert.True(secondStart);
+        // Release all remaining keys
+        state.OnKeyUp(ctrl: true, win: false, space: false);
+        state.OnKeyUp(ctrl: false, win: true, space: false);
+
+        // Space alone should NOT restart (ctrl and win no longer held)
+        state.OnKeyDown(ctrl: false, win: false, space: true);
+        Assert.False(state.IsRecording);
+
+        // Full combo should restart
+        state.OnKeyDown(ctrl: true, win: false, space: false);
+        state.OnKeyDown(ctrl: false, win: true, space: false);
+        Assert.True(state.IsRecording);
     }
 }
