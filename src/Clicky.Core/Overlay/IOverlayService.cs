@@ -64,4 +64,26 @@ public interface IOverlayService
         MonitorBounds monitorPhysBounds,
         string? label,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Pins the triangle at the target coordinate and shows the "Step N of M" badge.
+    /// The triangle pulses slowly in this state instead of tracking the mouse cursor.
+    /// </summary>
+    void StartWaitingForStep(
+        int claudeX, int claudeY,
+        int screenshotWidth, int screenshotHeight,
+        MonitorBounds monitorPhysBounds,
+        string? label,
+        int stepNumber,
+        int totalSteps);
+
+    /// <summary>
+    /// Registers the target window HWND for foreground monitoring.
+    /// ForegroundLost fires when the user switches away from this window.
+    /// Pass nint.Zero to disable monitoring.
+    /// </summary>
+    void SetTargetHwnd(nint hwnd);
+
+    /// <summary>Fired on the UI thread when the foreground window no longer matches TargetHwnd.</summary>
+    event EventHandler? ForegroundLost;
 }

@@ -64,6 +64,7 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int nIndex);
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
     [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X; public int Y; }
@@ -87,11 +88,16 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
     // Triangle spring-out takes ~300ms; bars replace it once it has settled at the buddy position.
     private const int FlyoutDurationFrames = 18;
 
-    private enum OverlayState { Idle, Listening, Processing }
+    private enum OverlayState { Idle, Listening, Processing, WaitingForStep }
 
     private OverlayState _state = OverlayState.Idle;
     private Point _currentPos;
     private bool _isFlying;
+    private double _pinnedX, _pinnedY;
+    private int _stepNumber, _totalSteps;
+    private nint _targetHwnd;
+    private double _pulsePhase;
+    private const double PulsePeriodSeconds = 2.0;
 
     // Waveform animation
     private double _wavePhase;
@@ -119,6 +125,12 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
 
     // Spring physics — delegates to SpringSimulator (response=0.2, dampingFraction=0.6)
     private SpringSimulator _spring;
+
+    /// <inheritdoc/>
+    public event EventHandler? ForegroundLost;
+
+    /// <inheritdoc/>
+    public void SetTargetHwnd(nint hwnd) => _targetHwnd = hwnd;
 
     public CursorOverlayWindow()
     {
@@ -184,6 +196,16 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
             Canvas.SetTop (CursorGlow, raw.Y - CursorGlow.Height / 2);
         }
 
+        if (_targetHwnd != nint.Zero && _state == OverlayState.WaitingForStep)
+        {
+            var fg = GetForegroundWindow();
+            if (fg != _targetHwnd)
+            {
+                _targetHwnd = nint.Zero;
+                ForegroundLost?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
         switch (_state)
         {
             case OverlayState.Idle when !_isFlying:
@@ -244,6 +266,18 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
                 Canvas.SetLeft(Spinner, _currentPos.X - 7);
                 Canvas.SetTop(Spinner, _currentPos.Y - 7);
                 break;
+
+            case OverlayState.WaitingForStep:
+            {
+                _pulsePhase += (1.0 / 60.0) / PulsePeriodSeconds * 2 * Math.PI;
+                var pulse = 1.0 + Math.Sin(_pulsePhase) * 0.15;
+                TrianglePos.X = _pinnedX;
+                TrianglePos.Y = _pinnedY;
+                TriangleRotate.Angle = 0;
+                TriangleScale.ScaleX = pulse;
+                TriangleScale.ScaleY = pulse;
+                break;
+            }
         }
     }
 
@@ -373,6 +407,8 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
             SpeechBubble.Opacity = 0;
             CursorGlow.Opacity = 0;
             Triangle.Opacity = _hiddenMode ? 0 : 1;
+            StepBadge.Visibility = Visibility.Collapsed;
+            _targetHwnd = nint.Zero;
         });
     }
 
@@ -393,6 +429,36 @@ public sealed partial class CursorOverlayWindow : Window, IOverlayService
             SetBarsOpacity(0);
             Spinner.Opacity = 0;
             SpeechBubble.Opacity = 0;
+        });
+    }
+
+    /// <inheritdoc/>
+    public void StartWaitingForStep(
+        int claudeX, int claudeY,
+        int screenshotWidth, int screenshotHeight,
+        MonitorBounds monitorPhysBounds,
+        string? label,
+        int stepNumber,
+        int totalSteps)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var dip = ClaudeCoordToWpfDip(claudeX, claudeY, screenshotWidth, screenshotHeight, monitorPhysBounds);
+            _pinnedX = dip.X;
+            _pinnedY = dip.Y;
+            _stepNumber = stepNumber;
+            _totalSteps = totalSteps;
+            _pulsePhase = 0;
+            _state = OverlayState.WaitingForStep;
+            _isFlying = false;
+            _animTimer.Stop();
+            _dwellTimer.Stop();
+            SetBarsOpacity(0);
+            Spinner.Opacity = 0;
+            SpeechBubble.Opacity = 0;
+            Triangle.Opacity = 1;
+            StepBadgeText.Text = $"Step {stepNumber} of {totalSteps}";
+            StepBadge.Visibility = Visibility.Visible;
         });
     }
 
