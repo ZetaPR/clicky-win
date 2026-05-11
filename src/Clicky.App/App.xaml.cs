@@ -1,4 +1,5 @@
 using Clicky.Core;
+using Clicky.Core.Settings;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -73,7 +74,10 @@ public partial class App : Application
 
     private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        Log.Information("Settings clicked (not yet implemented)");
+        var svc = _services!.GetRequiredService<IUserSettingsService>();
+        var settings = svc.Load();
+        var win = new ConfigWindow(settings, svc);
+        win.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -3,8 +3,10 @@ using Clicky.Capture.Hotkeys;
 using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
 using Clicky.Overlay;
+using Clicky.Core.Settings;
 using Clicky.Services;
 using Clicky.Services.Audio;
+using Clicky.Services.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Clicky.App;
@@ -22,6 +24,7 @@ public static class ServiceRegistration
         services.AddSingleton<StepPlanStore>();
         services.AddSingleton<StepClickWatcher>();
         services.AddHttpClient<IStepVerifier, CloudflareWorkerVerifyService>();
+        services.AddSingleton<IUserSettingsService, UserSettingsService>();
         services.AddSingleton<ICompanionOrchestrator, CompanionOrchestrator>();
         services.AddHttpClient<ILlmService, CloudflareWorkerLlmService>();
         services.AddHttpClient<ITtsService, CartesiaTtsService>();
