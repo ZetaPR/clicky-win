@@ -27,7 +27,7 @@
 <body>
 
 <h1>Clicky Win</h1>
-<p class="subtitle">WPF .NET 9 AI-powered screen + voice assistant — last updated 2026-05-11</p>
+<p class="subtitle">WPF .NET 9 AI-powered screen + voice assistant — last updated 2026-05-12</p>
 
 <h2>Current State</h2>
 <table>
@@ -112,6 +112,11 @@
 </table>
 
 <h2>Session Log</h2>
+
+<div class="log-entry">
+  <div class="log-date">2026-05-12</div>
+  <strong>Startup fix: overlay Show() + ShutdownMode=OnExplicitShutdown.</strong> App was running (process visible) but tray icon hidden in Windows 11 overflow area. Root fixes: call <code>.Show()</code> on <code>CursorOverlayWindow</code> after DI build (required for <code>OnSourceInitialized</code> → click-through style + <code>_hwnd</code>); set <code>ShutdownMode="OnExplicitShutdown"</code> so tray-only app never auto-exits; added granular startup logs + <code>AppDomain.UnhandledException</code> catcher. Republished exe.
+</div>
 
 <div class="log-entry">
   <div class="log-date">2026-05-11</div>
