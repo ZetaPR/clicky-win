@@ -26,6 +26,12 @@ public partial class App : Application
                 retainedFileCountLimit: 30)
             .CreateLogger();
 
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            Log.Fatal(args.ExceptionObject as Exception, "Unhandled domain exception terminating={IsTerminating}", args.IsTerminating);
+            Log.CloseAndFlush();
+        };
+
         base.OnStartup(e);
 
         try
@@ -36,13 +42,20 @@ public partial class App : Application
             var services = new ServiceCollection();
             services.AddClickyServices();
             _services = services.BuildServiceProvider();
+            Log.Information("DI container built");
+
+            (_services.GetRequiredService<IOverlayService>() as Window)?.Show();
+            Log.Information("Overlay shown");
 
             var ptt = _services.GetRequiredService<IPushToTalkHook>();
             ptt.RecordingStarted += (_, _) => Log.Information("Recording started");
+            Log.Information("Starting PTT hook");
             ptt.Start();
+            Log.Information("PTT hook started");
 
             var companion = _services.GetRequiredService<ICompanionOrchestrator>();
             companion.Start();
+            Log.Information("Companion started — ready");
         }
         catch (Exception ex)
         {
