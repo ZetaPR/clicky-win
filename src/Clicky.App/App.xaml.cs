@@ -37,6 +37,7 @@ public partial class App : Application
         try
         {
             _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
+            _trayIcon.ForceCreate();
             Log.Information("Tray icon initialized");
 
             var services = new ServiceCollection();
