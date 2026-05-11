@@ -21,6 +21,12 @@ public sealed class PushToTalkHook : IPushToTalkHook
     /// <inheritdoc/>
     public event EventHandler? RecordingStopped;
 
+    /// <inheritdoc/>
+    // CS0067 suppressed: MousePressed is wired to SharpHook in Task 8.
+#pragma warning disable CS0067
+    public event EventHandler<MousePressedEventArgs>? MousePressed;
+#pragma warning restore CS0067
+
     /// <summary>Initializes the hook with a keyboard-only global listener.</summary>
     public PushToTalkHook()
     {
