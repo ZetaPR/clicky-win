@@ -74,10 +74,10 @@ public partial class App : Application
 
     private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var svc = _services!.GetRequiredService<IUserSettingsService>();
-        var settings = svc.Load();
-        var win = new ConfigWindow(settings, svc);
-        win.Show();
+        var svc      = _services!.GetRequiredService<IUserSettingsService>();
+        var overlay  = _services!.GetRequiredService<IOverlayService>();
+        var companion = _services!.GetRequiredService<CompanionSettings>();
+        new SettingsWindow(svc.Load(), svc, overlay, companion).Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

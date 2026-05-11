@@ -13,5 +13,5 @@ public sealed class CompanionSettings
     public string CartesiaApiKey { get; init; } = string.Empty;
 
     /// <summary>Cartesia voice ID to use for TTS synthesis.</summary>
-    public string CartesiaVoiceId { get; init; } = "a0e99841-438c-4a64-b679-ae501e7d6091";
+    public string CartesiaVoiceId { get; set; } = "a0e99841-438c-4a64-b679-ae501e7d6091";
 }
