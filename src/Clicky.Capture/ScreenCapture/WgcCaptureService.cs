@@ -3,25 +3,17 @@ using System.Drawing.Imaging;
 using Clicky.Core;
 using Windows.Win32;
 using Windows.Win32.UI.WindowsAndMessaging;
+using CoreScreenCapture = Clicky.Core.ScreenCapture;
 
 namespace Clicky.Capture.ScreenCapture;
 
-/// <summary>
-/// Phase 1 walking-skeleton screen capture using GDI CopyFromScreen.
-/// Will be replaced in Phase 4 with true Windows.Graphics.Capture (WGC)
-/// once full D3D11 interop is wired up for multi-monitor + DPI support.
-/// Limitation: CopyFromScreen may miss hardware-accelerated content
-/// (Chromium, WPF, exclusive-fullscreen games).
-/// </summary>
 public sealed class WgcCaptureService : IScreenCaptureService
 {
     /// <inheritdoc/>
-    public Task<byte[]> CapturePrimaryMonitorAsync(CancellationToken cancellationToken = default)
-    {
-        return Task.Run(() => CaptureJpeg(), cancellationToken);
-    }
+    public Task<CoreScreenCapture> CaptureAsync(CancellationToken cancellationToken = default)
+        => Task.Run(CaptureJpeg, cancellationToken);
 
-    private static byte[] CaptureJpeg()
+    private static CoreScreenCapture CaptureJpeg()
     {
         var width = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CXSCREEN);
         var height = PInvoke.GetSystemMetrics(SYSTEM_METRICS_INDEX.SM_CYSCREEN);
@@ -32,7 +24,9 @@ public sealed class WgcCaptureService : IScreenCaptureService
 
         using var ms = new MemoryStream();
         bmp.Save(ms, ImageFormat.Jpeg);
-        return ms.ToArray();
+
+        var bounds = new MonitorBounds(0, 0, width, height);
+        return new CoreScreenCapture(ms.ToArray(), width, height, bounds);
     }
 
     /// <inheritdoc/>

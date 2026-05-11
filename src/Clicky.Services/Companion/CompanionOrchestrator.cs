@@ -134,15 +134,15 @@ public sealed class CompanionOrchestrator : ICompanionOrchestrator
             return;
         }
 
-        var jpeg = await _capture.CapturePrimaryMonitorAsync(token).ConfigureAwait(false);
-        Log.Information("Captured {Bytes} bytes, transcript: {Transcript}", jpeg.Length, transcript);
+        var capture = await _capture.CaptureAsync(token).ConfigureAwait(false);
+        Log.Information("Captured {Bytes} bytes, transcript: {Transcript}", capture.Jpeg.Length, transcript);
 
-        await StreamLlmToTtsAsync(jpeg, transcript, token).ConfigureAwait(false);
+        await StreamLlmToTtsAsync(capture, transcript, token).ConfigureAwait(false);
     }
 
-    private async Task StreamLlmToTtsAsync(byte[] jpeg, string transcript, CancellationToken token)
+    private async Task StreamLlmToTtsAsync(ScreenCapture capture, string transcript, CancellationToken token)
     {
-        await foreach (var delta in _llm.StreamResponseAsync(jpeg, transcript, token).ConfigureAwait(false))
+        await foreach (var delta in _llm.StreamResponseAsync(capture.Jpeg, transcript, token).ConfigureAwait(false))
         {
             await _tts.SpeakAsync(delta, token).ConfigureAwait(false);
         }

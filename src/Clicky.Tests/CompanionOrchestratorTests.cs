@@ -59,7 +59,8 @@ public class CompanionOrchestratorTests
         var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
 
         var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0x00 };
-        capture.CapturePrimaryMonitorAsync(Arg.Any<CancellationToken>()).Returns(jpeg);
+        var screenCapture = new ScreenCapture(jpeg, 1920, 1080, new MonitorBounds(0, 0, 1920, 1080));
+        capture.CaptureAsync(Arg.Any<CancellationToken>()).Returns(screenCapture);
 
         llm.StreamResponseAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
            .Returns(AsyncEnumerableReturn("Hello", " world"));

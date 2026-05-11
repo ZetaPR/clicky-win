@@ -4,8 +4,8 @@ namespace Clicky.Core;
 public interface IScreenCaptureService : IDisposable
 {
     /// <summary>
-    /// Captures the primary monitor and returns JPEG-encoded bytes.
+    /// Captures the primary monitor and returns JPEG bytes with dimensions and monitor bounds.
     /// Called on a background thread; implementation must be thread-safe.
     /// </summary>
-    Task<byte[]> CapturePrimaryMonitorAsync(CancellationToken cancellationToken = default);
+    Task<ScreenCapture> CaptureAsync(CancellationToken cancellationToken = default);
 }
