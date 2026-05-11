@@ -8,7 +8,8 @@ namespace Clicky.Tests;
 public class CompanionOrchestratorTests
 {
     private static (IPushToTalkHook ptt, IScreenCaptureService capture, IMicrophoneRecorder mic,
-        ITranscriptionService stt, ILlmService llm, ITtsService tts)
+        ITranscriptionService stt, ILlmService llm, ITtsService tts,
+        IOverlayService overlay, StepPlanStore store, StepClickWatcher watcher, IStepVerifier verifier)
         CreateFakes()
     {
         var ptt = Substitute.For<IPushToTalkHook>();
@@ -17,17 +18,19 @@ public class CompanionOrchestratorTests
         var stt = Substitute.For<ITranscriptionService>();
         var llm = Substitute.For<ILlmService>();
         var tts = Substitute.For<ITtsService>();
-        return (ptt, capture, mic, stt, llm, tts);
+        var overlay = Substitute.For<IOverlayService>();
+        var store = new StepPlanStore();
+        var watcher = new StepClickWatcher(ptt);
+        var verifier = Substitute.For<IStepVerifier>();
+        return (ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
     }
 
     private static CompanionOrchestrator CreateOrchestrator(
         IPushToTalkHook ptt, IScreenCaptureService capture, IMicrophoneRecorder mic,
-        ITranscriptionService stt, ILlmService llm, ITtsService tts)
-        => new(ptt, capture, mic, stt, llm, tts);
+        ITranscriptionService stt, ILlmService llm, ITtsService tts,
+        IOverlayService overlay, StepPlanStore store, StepClickWatcher watcher, IStepVerifier verifier)
+        => new(ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
 
-    /// <summary>
-    /// Yields an async stream from an array of strings for use in LLM mock setup.
-    /// </summary>
     private static async IAsyncEnumerable<string> AsyncEnumerableReturn(params string[] items)
     {
         foreach (var item in items)
@@ -39,13 +42,15 @@ public class CompanionOrchestratorTests
     public async Task OnRecordingStarted_CallsConnectAndStartsMic()
     {
         // Arrange
-        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
-        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        var (ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier) = CreateFakes();
+        using var watcher2 = watcher;
+        using var store2 = store;
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
         orchestrator.Start();
 
         // Act
         ptt.RecordingStarted += Raise.Event();
-        await Task.Delay(100); // allow async void handler to complete
+        await Task.Delay(100);
 
         // Assert
         await stt.Received().ConnectAsync(Arg.Any<CancellationToken>());
@@ -56,7 +61,9 @@ public class CompanionOrchestratorTests
     public async Task OnRecordingStopped_WithTranscript_CallsLlmAndTts()
     {
         // Arrange
-        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
+        var (ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier) = CreateFakes();
+        using var watcher2 = watcher;
+        using var store2 = store;
 
         var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0x00 };
         var screenCapture = new ScreenCapture(jpeg, 1920, 1080, new MonitorBounds(0, 0, 1920, 1080));
@@ -66,7 +73,14 @@ public class CompanionOrchestratorTests
             Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
            .Returns(AsyncEnumerableReturn("Hello", " world"));
 
-        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        overlay.FlyToAndShowBubbleAsync(
+            Arg.Any<int>(), Arg.Any<int>(),
+            Arg.Any<int>(), Arg.Any<int>(),
+            Arg.Any<MonitorBounds>(), Arg.Any<string?>(),
+            Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
         orchestrator.Start();
 
         // Start recording
@@ -78,7 +92,7 @@ public class CompanionOrchestratorTests
 
         // Act — stop recording
         ptt.RecordingStopped += Raise.Event();
-        await Task.Delay(200); // allow async void handler and pipeline to complete
+        await Task.Delay(200);
 
         // Assert — TTS was called at least once with any string
         await tts.Received().SpeakAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -89,9 +103,11 @@ public class CompanionOrchestratorTests
     public async Task OnRecordingStopped_WithEmptyTranscript_DoesNotCallLlm()
     {
         // Arrange
-        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
+        var (ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier) = CreateFakes();
+        using var watcher2 = watcher;
+        using var store2 = store;
 
-        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
         orchestrator.Start();
 
         // Start then stop without any transcript
@@ -102,7 +118,6 @@ public class CompanionOrchestratorTests
         await Task.Delay(200);
 
         // Assert — LLM should not be called
-        // StreamResponseAsync returns IAsyncEnumerable — not awaitable; verify call count directly
         llm.DidNotReceive().StreamResponseAsync(
             Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
@@ -111,7 +126,9 @@ public class CompanionOrchestratorTests
     public async Task OnRecordingStarted_WhilePipelineRunning_CancelsPreviousPipeline()
     {
         // Arrange
-        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
+        var (ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier) = CreateFakes();
+        using var watcher2 = watcher;
+        using var store2 = store;
 
         // First ConnectAsync blocks until its token is cancelled
         stt.ConnectAsync(Arg.Any<CancellationToken>()).Returns(async ci =>
@@ -119,16 +136,16 @@ public class CompanionOrchestratorTests
             await Task.Delay(Timeout.Infinite, (CancellationToken)ci[0]);
         });
 
-        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
         orchestrator.Start();
 
         // Act — first press starts the blocking ConnectAsync
         ptt.RecordingStarted += Raise.Event();
-        await Task.Delay(50); // let first pipeline get into ConnectAsync
+        await Task.Delay(50);
 
         // Second press should cancel the first and start a new session
         ptt.RecordingStarted += Raise.Event();
-        await Task.Delay(100); // let second pipeline begin
+        await Task.Delay(100);
 
         // Assert — ConnectAsync was called twice (second press started a new session)
         await stt.Received(2).ConnectAsync(Arg.Any<CancellationToken>());
@@ -138,12 +155,13 @@ public class CompanionOrchestratorTests
     public void Dispose_CanBeCalledMultipleTimes()
     {
         // Arrange
-        var (ptt, capture, mic, stt, llm, tts) = CreateFakes();
-        var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
+        var (ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier) = CreateFakes();
+        using var watcher2 = watcher;
+        using var store2 = store;
+        var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts, overlay, store, watcher, verifier);
 
         // Act + Assert — no exception on double dispose
         orchestrator.Dispose();
         orchestrator.Dispose();
     }
-
 }

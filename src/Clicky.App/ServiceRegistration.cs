@@ -2,6 +2,7 @@ using Clicky.Capture.Audio;
 using Clicky.Capture.Hotkeys;
 using Clicky.Capture.ScreenCapture;
 using Clicky.Core;
+using Clicky.Overlay;
 using Clicky.Services;
 using Clicky.Services.Audio;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +18,10 @@ public static class ServiceRegistration
         services.AddSingleton<IScreenCaptureService, WgcCaptureService>();
         services.AddSingleton<IMicrophoneRecorder, WasapiMicrophoneRecorder>();
         services.AddSingleton<ITranscriptionService, AssemblyAITranscriptionService>();
+        services.AddSingleton<IOverlayService, CursorOverlayWindow>();
+        services.AddSingleton<StepPlanStore>();
+        services.AddSingleton<StepClickWatcher>();
+        services.AddHttpClient<IStepVerifier, CloudflareWorkerVerifyService>();
         services.AddSingleton<ICompanionOrchestrator, CompanionOrchestrator>();
         services.AddHttpClient<ILlmService, CloudflareWorkerLlmService>();
         services.AddHttpClient<ITtsService, CartesiaTtsService>();
