@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clicky Win — Progress</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 900px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 32px; }
+  h2 { font-size: 1.1rem; font-weight: 600; border-bottom: 2px solid #e5e5e5; padding-bottom: 6px; margin-top: 36px; }
+  h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; color: #333; }
+  .status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+  .done { background: #d1fae5; color: #065f46; }
+  .in-progress { background: #fef3c7; color: #92400e; }
+  .pending { background: #e5e7eb; color: #374151; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 8px; }
+  th { text-align: left; padding: 6px 10px; background: #f3f4f6; font-weight: 600; }
+  td { padding: 6px 10px; border-top: 1px solid #e5e5e5; vertical-align: top; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+  .log-entry { border-left: 3px solid #6366f1; padding: 8px 12px; margin: 8px 0; background: #fff; border-radius: 0 6px 6px 0; font-size: 0.88rem; }
+  .log-date { color: #999; font-size: 0.78rem; }
+  ul { margin: 6px 0; padding-left: 20px; font-size: 0.88rem; }
+  li { margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<h1>Clicky Win</h1>
+<p class="subtitle">WPF .NET 9 AI-powered screen + voice assistant — last updated 2026-05-11</p>
+
+<h2>Current State</h2>
+<table>
+  <tr><th>Area</th><th>Status</th><th>Notes</th></tr>
+  <tr>
+    <td>Core pipeline</td>
+    <td><span class="status done">Done</span></td>
+    <td>PTT → Mic/STT → Screenshot → Worker → TTS + Overlay → Idle. Fully working.</td>
+  </tr>
+  <tr>
+    <td>Overlay + animations</td>
+    <td><span class="status done">Done</span></td>
+    <td>Spring triangle, waveform bars, spinner arc, Bézier flight, speech bubble. All states working.</td>
+  </tr>
+  <tr>
+    <td>Settings UI</td>
+    <td><span class="status done">Done</span></td>
+    <td>Hotkey, colors, voice, cursor mode, log folder/level. Takes effect on Save without restart.</td>
+  </tr>
+  <tr>
+    <td>Cloudflare Worker</td>
+    <td><span class="status done">Done</span></td>
+    <td>Single-turn mode. Receives screenshot + transcript, proxies to Claude, streams SSE back.</td>
+  </tr>
+  <tr>
+    <td>publish.ps1 + versioning</td>
+    <td><span class="status done">Done</span></td>
+    <td>1.0.0.&lt;build&gt; format. Single-file win-x64 exe. Keys baked in from .env at publish time.</td>
+  </tr>
+  <tr>
+    <td>Tests</td>
+    <td><span class="status done">Done</span></td>
+    <td>xUnit coverage across all services. All pass.</td>
+  </tr>
+  <tr>
+    <td><strong>Multi-step guidance</strong></td>
+    <td><span class="status in-progress">In Progress</span></td>
+    <td>Architecture + format designed (Sections 1–3 approved). Ready for implementation plan.</td>
+  </tr>
+</table>
+
+<h2>Active Feature: Multi-Step Guidance</h2>
+<p>Spec: <code>docs/superpowers/specs/2026-05-11-multi-step-design.md</code></p>
+
+<h3>Section 1 — Architecture (Approved)</h3>
+<ul>
+  <li><strong>StepPlanStore</strong> (Clicky.Services) — holds plan in memory: step index, original screenshot, conversation history, target HWND. Clears on end/timeout.</li>
+  <li><strong>StepClickWatcher</strong> (Clicky.Services) — arms after step delivered, subscribes to SharpHook <code>RawMousePressed</code>, triggers verify on click within ±60px of target in right window.</li>
+  <li><strong>StepVerifier</strong> (Clicky.Services) — waits 300ms post-click, grabs fresh screenshot, sends to worker with history. Worker returns: <code>advance</code> | <code>correct</code> | <code>complete</code>.</li>
+  <li><strong>ForegroundGuard</strong> — ~5 lines in existing 60fps <code>OnMainTick</code>. Fires drift/timeout state machine when user leaves target app.</li>
+  <li><strong>Overlay</strong> — new <code>OverlayState.WaitingForStep</code> (triangle stays pinned + pulses). New "Step N of M" badge with bounding-box collision avoidance.</li>
+  <li><strong>CompanionOrchestrator</strong> — branches on result type after StreamLlmToTtsAsync instead of always calling ReturnToIdle.</li>
+  <li><strong>Worker</strong> — two new modes: <code>mode:"plan"</code> and <code>mode:"verify"</code>. History is client-side in StepPlanStore.</li>
+</ul>
+
+<h3>Section 2 — Step Plan Format (Approved)</h3>
+<ul>
+  <li><strong>Lazy coordinates</strong> — only step 1 gets coordinates in the initial plan. Steps 2+ get coordinates from the verify response (fresh post-action screenshot).</li>
+  <li><strong>Tag format</strong> — <code>[STEP:1:x,y:label]text[/STEP]</code> for step 1; <code>[STEP:2]text[/STEP]</code> for subsequent steps.</li>
+  <li><strong>Incremental parse</strong> — <code>PendingStep</code> accumulates text until <code>[/STEP]</code>, materialises into a real <code>Step</code>. Step 1 TTS starts immediately — no waiting for full plan.</li>
+  <li><strong>Verify double-duty</strong> — verify response returns <code>{result, nextX, nextY, nextLabel}</code>.</li>
+</ul>
+
+<h3>Section 3 — Behaviour Decisions (Approved)</h3>
+<ul>
+  <li><strong>Timeout:</strong> 30 seconds of no click → StepClickWatcher disarms, overlay idles, StepPlanStore clears.</li>
+  <li><strong>PTT during sequence:</strong> cancels entirely. No resume. Pipeline starts fresh.</li>
+  <li><strong>Trigger:</strong> Claude decides — no client-side detection. Worker sends every request in the same format; Claude returns <code>[POINT:...]</code> or <code>[STEP:...]</code> based on judgement.</li>
+</ul>
+<p><strong>Design complete.</strong> Next: implementation plan.</p>
+
+<h2>Architecture Quick Reference</h2>
+<table>
+  <tr><th>Project</th><th>Purpose</th></tr>
+  <tr><td><code>Clicky.App</code></td><td>WPF executable, entry point, DI wiring, tray icon host</td></tr>
+  <tr><td><code>Clicky.Core</code></td><td>Shared interfaces, models, physics — no external deps</td></tr>
+  <tr><td><code>Clicky.Capture</code></td><td>Screen capture (Vortice D3D11), audio (NAudio WASAPI), input hooks (SharpHook)</td></tr>
+  <tr><td><code>Clicky.Overlay</code></td><td>Transparent click-through overlay window</td></tr>
+  <tr><td><code>Clicky.Services</code></td><td>AI pipeline: STT, LLM, TTS, orchestration</td></tr>
+  <tr><td><code>Clicky.Tests</code></td><td>xUnit tests (NSubstitute mocks)</td></tr>
+  <tr><td><code>worker/</code></td><td>Cloudflare Worker — Claude API proxy</td></tr>
+</table>
+
+<h2>Session Log</h2>
+
+<div class="log-entry">
+  <div class="log-date">2026-05-11</div>
+  <strong>Multi-step design complete (Sections 1–3 approved).</strong>
+  Architecture, step plan format (lazy coordinates + incremental parse), and behaviour decisions (30s timeout, PTT cancels, Claude decides trigger) all locked in. Ready for implementation plan.
+</div>
+
+<div class="log-entry">
+  <div class="log-date">2026-05-11</div>
+  <strong>PROGRESS.html established.</strong> First commit pushed to GitHub. Repo at ZetaPR/clicky-win.
+</div>
+
+</body>
+</html>

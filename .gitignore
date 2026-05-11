@@ -34,3 +34,15 @@ Desktop.ini
 
 # Publish output
 publish/
+
+# Worker dependencies
+worker/node_modules/
+worker/.wrangler/
+worker/tmp/
+
+# AI development tools — local only, never committed
+CLAUDE.md
+.claude/
+.mcp.json
+.superpowers/
+.skills/
