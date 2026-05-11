@@ -1,0 +1,149 @@
+<Window x:Class="Clicky.App.ConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Clicky — API Configuration"
+        Width="460" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="#1A1A2E"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+
+        <ControlTemplate x:Key="FlatButtonTemplate" TargetType="Button">
+            <Border x:Name="Bd"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="4"
+                    Padding="{TemplateBinding Padding}">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Bd" Property="Opacity" Value="0.82"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="Bd" Property="Opacity" Value="0.65"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <Style x:Key="PrimaryBtn" TargetType="Button">
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}"/>
+            <Setter Property="Background" Value="#4A9EFF"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style x:Key="SecondaryBtn" TargetType="Button">
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}"/>
+            <Setter Property="Background" Value="#2A2A4E"/>
+            <Setter Property="Foreground" Value="#AAAACC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#3A3A5E"/>
+            <Setter Property="Padding" Value="0,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0D0D1E"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#3A3A5E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="SelectionBrush" Value="#4A9EFF"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Height" Value="30"/>
+        </Style>
+
+        <Style x:Key="LinkBtn" TargetType="Button">
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#4A9EFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+    </Window.Resources>
+
+    <StackPanel Margin="24">
+
+        <!-- Title -->
+        <TextBlock Text="API Configuration" Foreground="White" FontSize="18" FontWeight="Bold" Margin="0,0,0,4"/>
+        <TextBlock TextWrapping="Wrap" Foreground="#6666AA" FontSize="11" Margin="0,0,0,6">
+            Clicky needs three external services to work. Set up each one and paste your keys below.
+            Keys are stored on this machine only — never uploaded anywhere.
+        </TextBlock>
+        <TextBlock Text="Changes take effect after restarting Clicky." Foreground="#CC8844" FontSize="10" FontStyle="Italic" Margin="0,0,0,20"/>
+
+        <!-- ── CLOUDFLARE WORKER ──────────────────────── -->
+        <TextBlock Text="CLOUDFLARE WORKER" Foreground="#4A9EFF" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+        <TextBlock TextWrapping="Wrap" Foreground="#AAAACC" FontSize="11" Margin="0,0,0,4">
+            The Worker proxies your requests to Claude (Anthropic API).
+            Deploy the included <Run FontFamily="Consolas">worker/</Run> folder to Cloudflare:
+        </TextBlock>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="Cloudflare Workers (free tier) →" Style="{StaticResource LinkBtn}"
+                    Tag="https://workers.cloudflare.com/" Click="Link_Click"/>
+            <TextBlock Text="  ·  " Foreground="#3A3A5E" VerticalAlignment="Center"/>
+            <Button Content="Setup guide →" Style="{StaticResource LinkBtn}"
+                    Tag="https://developers.cloudflare.com/workers/get-started/guide/" Click="Link_Click"/>
+        </StackPanel>
+        <TextBox x:Name="WorkerUrlBox" Text="" ToolTip="https://your-worker.your-subdomain.workers.dev"/>
+
+        <Separator Background="#2A2A4E" Margin="0,16"/>
+
+        <!-- ── ASSEMBLYAI ────────────────────────────── -->
+        <TextBlock Text="ASSEMBLYAI — SPEECH TO TEXT" Foreground="#4A9EFF" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+        <TextBlock TextWrapping="Wrap" Foreground="#AAAACC" FontSize="11" Margin="0,0,0,4">
+            Transcribes your voice in real-time while you hold the hotkey.
+            Free tier includes 100 hours/month.
+        </TextBlock>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="Get a free API key at assemblyai.com →" Style="{StaticResource LinkBtn}"
+                    Tag="https://www.assemblyai.com/" Click="Link_Click"/>
+        </StackPanel>
+        <TextBox x:Name="AssemblyAiKeyBox" Text=""/>
+
+        <Separator Background="#2A2A4E" Margin="0,16"/>
+
+        <!-- ── CARTESIA ──────────────────────────────── -->
+        <TextBlock Text="CARTESIA — TEXT TO SPEECH" Foreground="#4A9EFF" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+        <TextBlock TextWrapping="Wrap" Foreground="#AAAACC" FontSize="11" Margin="0,0,0,4">
+            Streams Claude's spoken reply through your speakers with near-zero latency.
+        </TextBlock>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="Get an API key at cartesia.ai →" Style="{StaticResource LinkBtn}"
+                    Tag="https://cartesia.ai/" Click="Link_Click"/>
+        </StackPanel>
+        <TextBox x:Name="CartesiaKeyBox" Text=""/>
+
+        <Separator Background="#2A2A4E" Margin="0,16"/>
+
+        <!-- ── STATUS ────────────────────────────────── -->
+        <Border x:Name="StatusBorder" Background="#0D1A0D" BorderBrush="#1A3A1A"
+                BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,4"
+                Visibility="Collapsed">
+            <TextBlock x:Name="StatusText" Foreground="#55CC55" FontSize="11" TextWrapping="Wrap"/>
+        </Border>
+
+        <!-- ── ACTIONS ───────────────────────────────── -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Cancel" Style="{StaticResource SecondaryBtn}"
+                    Width="84" Click="Cancel_Click" Margin="0,0,10,0"/>
+            <Button Content="Save" Style="{StaticResource PrimaryBtn}"
+                    Width="84" Click="Save_Click"/>
+        </StackPanel>
+
+    </StackPanel>
+</Window>

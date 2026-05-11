@@ -7,6 +7,9 @@
     <RootNamespace>Clicky.Overlay</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Serilog" Version="4.2.0" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Clicky.Core\Clicky.Core.csproj" />
   </ItemGroup>
 </Project>

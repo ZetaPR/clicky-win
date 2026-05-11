@@ -1,0 +1,2 @@
+GetSystemMetrics
+SYSTEM_METRICS_INDEX
