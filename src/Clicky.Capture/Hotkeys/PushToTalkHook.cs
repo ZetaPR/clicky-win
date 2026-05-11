@@ -22,19 +22,17 @@ public sealed class PushToTalkHook : IPushToTalkHook
     public event EventHandler? RecordingStopped;
 
     /// <inheritdoc/>
-    // CS0067 suppressed: MousePressed is wired to SharpHook in Task 8.
-#pragma warning disable CS0067
     public event EventHandler<MousePressedEventArgs>? MousePressed;
-#pragma warning restore CS0067
 
-    /// <summary>Initializes the hook with a keyboard-only global listener.</summary>
+    /// <summary>Initializes the hook with a global listener for both keyboard and mouse events.</summary>
     public PushToTalkHook()
     {
-        // GlobalHookType.Keyboard limits the hook to keyboard events only, avoiding unnecessary
-        // mouse hook overhead. Provider is null to use the default libuiohook provider.
-        _hook = new SimpleGlobalHook(GlobalHookType.Keyboard, globalHookProvider: null, runAsyncOnBackgroundThread: true);
+        // GlobalHookType.All enables keyboard and mouse events. Provider is null to use the
+        // default libuiohook provider.
+        _hook = new SimpleGlobalHook(GlobalHookType.All, globalHookProvider: null, runAsyncOnBackgroundThread: true);
         _hook.KeyPressed += OnKeyPressed;
         _hook.KeyReleased += OnKeyReleased;
+        _hook.MousePressed += OnMouseButtonPressed;
     }
 
     /// <inheritdoc/>
@@ -74,6 +72,13 @@ public sealed class PushToTalkHook : IPushToTalkHook
             _ => (false, false, false),
         };
 
+    private void OnMouseButtonPressed(object? sender, MouseHookEventArgs e)
+    {
+        // MouseButton.Button1.ToString() == "Button1"; callers filter on that value.
+        var args = new MousePressedEventArgs((int)e.Data.X, (int)e.Data.Y, e.Data.Button.ToString());
+        MousePressed?.Invoke(this, args);
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {
@@ -81,6 +86,7 @@ public sealed class PushToTalkHook : IPushToTalkHook
         _disposed = true;
         _hook.KeyPressed -= OnKeyPressed;
         _hook.KeyReleased -= OnKeyReleased;
+        _hook.MousePressed -= OnMouseButtonPressed;
         _hook.Dispose();
     }
 }
