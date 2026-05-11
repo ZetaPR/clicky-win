@@ -142,7 +142,8 @@ public sealed class CompanionOrchestrator : ICompanionOrchestrator
 
     private async Task StreamLlmToTtsAsync(ScreenCapture capture, string transcript, CancellationToken token)
     {
-        await foreach (var delta in _llm.StreamResponseAsync(capture.Jpeg, transcript, token).ConfigureAwait(false))
+        await foreach (var delta in _llm.StreamResponseAsync(
+            capture.Jpeg, transcript, capture.Width, capture.Height, token).ConfigureAwait(false))
         {
             await _tts.SpeakAsync(delta, token).ConfigureAwait(false);
         }

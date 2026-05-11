@@ -1,12 +1,12 @@
-using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Clicky.Core;
 
 namespace Clicky.Services;
 
 /// <summary>
-/// Sends a screenshot and transcript to the Cloudflare Worker and reads back
+/// Sends a screenshot and transcript to the Cloudflare Worker as JSON and reads back
 /// the Anthropic SSE stream, yielding text delta strings.
 /// </summary>
 public sealed class CloudflareWorkerLlmService : ILlmService
@@ -25,9 +25,11 @@ public sealed class CloudflareWorkerLlmService : ILlmService
     public async IAsyncEnumerable<string> StreamResponseAsync(
         byte[] screenshot,
         string transcript,
+        int screenshotWidth,
+        int screenshotHeight,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        using var response = await SendRequestAsync(screenshot, transcript, cancellationToken)
+        using var response = await SendRequestAsync(screenshot, transcript, screenshotWidth, screenshotHeight, cancellationToken)
             .ConfigureAwait(false);
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken)
@@ -42,15 +44,22 @@ public sealed class CloudflareWorkerLlmService : ILlmService
     private async Task<HttpResponseMessage> SendRequestAsync(
         byte[] screenshot,
         string transcript,
+        int screenshotWidth,
+        int screenshotHeight,
         CancellationToken cancellationToken)
     {
-        using var content = new MultipartFormDataContent();
+        var imageBase64 = Convert.ToBase64String(screenshot);
+        var payload = new
+        {
+            mode = "plan",
+            screenshot = imageBase64,
+            transcript,
+            screenshotWidth,
+            screenshotHeight,
+        };
 
-        using var imageContent = new ByteArrayContent(screenshot);
-        imageContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
-        content.Add(imageContent, "screenshot", "screenshot.jpg");
-
-        content.Add(new StringContent(transcript), "transcript");
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         var response = await _http.PostAsync(_settings.WorkerUrl, content, cancellationToken)
             .ConfigureAwait(false);

@@ -62,7 +62,8 @@ public class CompanionOrchestratorTests
         var screenCapture = new ScreenCapture(jpeg, 1920, 1080, new MonitorBounds(0, 0, 1920, 1080));
         capture.CaptureAsync(Arg.Any<CancellationToken>()).Returns(screenCapture);
 
-        llm.StreamResponseAsync(Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        llm.StreamResponseAsync(Arg.Any<byte[]>(), Arg.Any<string>(),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
            .Returns(AsyncEnumerableReturn("Hello", " world"));
 
         using var orchestrator = CreateOrchestrator(ptt, capture, mic, stt, llm, tts);
@@ -103,7 +104,7 @@ public class CompanionOrchestratorTests
         // Assert — LLM should not be called
         // StreamResponseAsync returns IAsyncEnumerable — not awaitable; verify call count directly
         llm.DidNotReceive().StreamResponseAsync(
-            Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
